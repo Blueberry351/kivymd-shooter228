@@ -32,16 +32,34 @@
     # size: dp(50), dp(50)
 
 <GameScreen>:
-    FloatLayout:
-        FloatLayout:
+    MDFloatLayout:
+        MDFloatLayout:
             id: game
-            FloatLayout:
+            MDFloatLayout:
                 id: back
-            FloatLayout:
+            MDFloatLayout:
                 id: front
                 Ship:
                     id: ship
                     center: root.center
 
-        FloatLayout:
+        MDFloatLayout:
             id: interface
+            MDBoxLayout:
+                spacing: dp(20)
+                padding: dp(20)
+                MDFloatingActionButton:
+                    icon: "arrow-left-bold"
+                    on_press: root.passKey("left")
+                    on_release: root.passKey("left")
+
+                MDFloatingActionButton:
+                    icon: "arrow-right-bold"
+                    on_press: root.passKey("right")
+                    on_release: root.passKey("right")
+
+                Widget:
+                MDFloatingActionButton:
+                    icon: "arrow-up-bold"
+                    on_press: root.passKey("shot")
+                    on_release: root.passKey("shot")
