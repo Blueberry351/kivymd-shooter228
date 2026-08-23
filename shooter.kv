@@ -1,65 +1,92 @@
+#:set color_cosmos 0.2, 0, 0.1, 1
+
+
 <MainScreen>:
-    MDBoxLayout:
-        orientation: 'vertical'
-        padding: '50dp'
+    MDBoxLayout: 
+        orientation: 'vertical'     
+        padding: '50dp' 
         spacing: '30dp'
         MDIconButton:
             icon: "cog"
-            pos_hint: {"right": 1, "top": 1}
+            pos_hint: {'right': 1}
             icon_size: '50dp'
-        # MDLabel:
-        #     text: "SHUTER"
-        #     halign: 'center'
-        #     font_size: '60sp'
         Image:
             source: 'assets/images/rocket.png'
             size_hint_y: 0.7
+            size: dp(50), dp(50)
             allow_stretch: True
         MDRectangleFlatButton:
             text: "PLAY"
             font_size: '60sp'
             pos_hint: {'center_x': 0.5,'center_y': 0.5}
-            # theme_text_color: "Custom"
-            # text_color: "white"
-            # line_color: "red"
             on_press:
                 root.manager.current = 'game'
 
-<Ship@Image>:
-    source: 'assets/images/rocket.png'
+<Ship>:
     size_hint: None, None
-    size: dp(100), dp(300)
-    # size: dp(50), dp(50)
+    # Для відлагодження (щоб бачити хітбокси) розкоментувати
+    # canvas.before:
+    #     Color: 
+    #         rgba: 1, 0, 0, 1
+    #     Rectangle:
+    #         size: self.size
+    #         pos: self.pos
+
+<PlayerShip@Ship>:
+    source: 'assets/images/rocket.png'
+    size: dp(100), dp(243)
+
+
+<EnemyShip@Ship>:
+    source: 'assets/images/ufo.png'  
+
 
 <GameScreen>:
     MDFloatLayout:
+        md_bg_color: color_cosmos
         MDFloatLayout:
             id: game
             MDFloatLayout:
                 id: back
             MDFloatLayout:
                 id: front
-                Ship:
+                PlayerShip:  
                     id: ship
-                    center: root.center
+                    pos: root.center_x, dp(50)     
 
         MDFloatLayout:
             id: interface
             MDBoxLayout:
                 spacing: dp(20)
                 padding: dp(20)
+                Widget:
+                MDFloatingActionButton:
+                    icon: "pause"
+                    pos_hint: {'top': 1}
+                    on_press: root.show_menu()
+                Widget:
+            MDBoxLayout:
+                spacing: dp(20)
+                padding: dp(20)
                 MDFloatingActionButton:
                     icon: "arrow-left-bold"
-                    on_press: root.passKey("left")
-                    on_release: root.passKey("left")
+                    on_press: root.pressKey('left')
+                    on_release: root.releaseKey('left')
 
                 MDFloatingActionButton:
                     icon: "arrow-right-bold"
-                    on_press: root.passKey("right")
-                    on_release: root.passKey("right")
-
+                    md_bg_color: app.theme_cls.primary_color
+                    on_press: root.pressKey('right')
+                    on_release: root.releaseKey('right')
                 Widget:
                 MDFloatingActionButton:
                     icon: "arrow-up-bold"
-                    on_press: root.passKey("shot")
-                    on_release: root.passKey("shot")
+                    md_bg_color: app.theme_cls.primary_color
+                    on_press: root.pressKey('shot')
+                    on_release: root.releaseKey('shot')
+
+
+<Shot>:
+    size_hint: None, None
+    size: 20, 20
+    md_bg_color: app.theme_cls.primary_color
