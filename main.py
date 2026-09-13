@@ -9,7 +9,6 @@ from kivymd.uix.screen import MDScreen
 from kivy import platform
 from kivy.core.window import Window
 from kivy.uix.image import Image
-from kivy.uix.widget import Widget
 from kivymd.uix.widget import MDWidget
 
 try:
@@ -22,41 +21,30 @@ FPS = 60
 BULLET_SPEED = dp(10)
 SHIP_SPEED = dp(10)
 ENEMY_SPEED = dp(3)
-ENEMY_SPAWN_INTERVAL = 1.5  # seconds
+ENEMY_SPAWN_INTERVAL = 1.5  # секунди
 
 ENEMY_IMAGES = [
     'assets/images/drone.png',
     'assets/images/shahed.png',
 ]
 
-# 'a' / 'd' keycodes reported by Window.on_key_down / on_key_up
 KEY_A = 97
 KEY_D = 100
 
 DIR_UP = 1
 DIR_DOWN = -1
 
-SCORE_PER_KILL = 1
-DISTANCE_SPEED = 5  # meters "flown" per second, purely cosmetic
+SCORE_PER_KILL = 10  # Очки за збитий ворожий корабель
+DISTANCE_SPEED = 5   # Дистанція в метрах за секунду
 
-CLOUD_SPEED = dp(1.5)
-CLOUD_SPAWN_INTERVAL = 1.2
-CLOUD_SIZE = (dp(150), dp(85))
-
-# Cache of (left_frac, right_frac, bottom_frac, top_frac) per image source,
-# describing where the actual (non-transparent) artwork sits inside the
-# full png canvas. Fractions are in Kivy's y-up widget space.
 _HITBOX_FRACTION_CACHE = {}
 
 
 def get_alpha_hitbox_fractions(source):
-    """Return (left, right, bottom, top) fractions (0..1) of the area of
-    `source` that is actually opaque, so hitboxes can hug the drawn pixels
-    instead of the whole (mostly transparent) png rectangle."""
     if source in _HITBOX_FRACTION_CACHE:
         return _HITBOX_FRACTION_CACHE[source]
 
-    fractions = (0.0, 1.0, 0.0, 1.0)  # fallback: the full image
+    fractions = (0.0, 1.0, 0.0, 1.0)
     if PILImage is not None:
         try:
             img = PILImage.open(source).convert('RGBA')
@@ -66,7 +54,6 @@ def get_alpha_hitbox_fractions(source):
                 left, upper, right, lower = bbox
                 left_frac = left / w
                 right_frac = right / w
-                # PIL measures from the top; Kivy widgets measure from the bottom.
                 bottom_frac = 1 - (lower / h)
                 top_frac = 1 - (upper / h)
                 fractions = (left_frac, right_frac, bottom_frac, top_frac)
@@ -81,14 +68,6 @@ def rects_overlap(a, b):
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
     return ax1 < bx2 and ax2 > bx1 and ay1 < by2 and ay2 > by1
-
-
-class Cloud(Widget):
-    """Purely decorative background element - drifts down, never interacts
-    with the player, enemies or bullets."""
-
-    def update(self):
-        self.y -= CLOUD_SPEED
 
 
 class Shot(MDWidget):
@@ -126,15 +105,12 @@ class Ship(Image):
         self.parent.add_widget(shot)
 
     def get_game_screen(self):
-        # Walk up until we find the GameScreen instance instead of
-        # relying on a fixed, fragile number of .parent hops.
         widget = self
         while widget is not None and not isinstance(widget, GameScreen):
             widget = widget.parent
         return widget
 
     def get_hitbox(self):
-        """Tight hitbox around the actual artwork, not the whole png canvas."""
         left_frac, right_frac, bottom_frac, top_frac = get_alpha_hitbox_fractions(self.source)
         img_w, img_h = self.norm_image_size
         img_left = self.center_x - img_w / 2
@@ -192,7 +168,6 @@ class GameScreen(MDScreen):
         self.eventkeys = {}
         self.bullets = []
         self.enemyShips = []
-        self.clouds = []
 
     def on_enter(self, *args):
         self.ship = self.ids.ship
@@ -201,7 +176,6 @@ class GameScreen(MDScreen):
         self.reset_state()
         self.updateEvent = Clock.schedule_interval(self.update, 1 / FPS)
         self.spawnEvent = Clock.schedule_interval(self.spawn_enemy, ENEMY_SPAWN_INTERVAL)
-        self.cloudSpawnEvent = Clock.schedule_interval(self.spawn_cloud, CLOUD_SPAWN_INTERVAL)
         Window.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
         return super().on_enter(*args)
 
@@ -210,19 +184,14 @@ class GameScreen(MDScreen):
             self.updateEvent.cancel()
         if hasattr(self, 'spawnEvent'):
             self.spawnEvent.cancel()
-        if hasattr(self, 'cloudSpawnEvent'):
-            self.cloudSpawnEvent.cancel()
         Window.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
         return super().on_leave(*args)
 
     def reset_state(self):
-        """Fresh run: clear leftover bullets/enemies and zero the stats."""
         for shot in self.bullets[:]:
             self.remove_bullet(shot)
         for enemy in self.enemyShips[:]:
             self.remove_enemy(enemy)
-        for cloud in self.clouds[:]:
-            self.remove_cloud(cloud)
         self.eventkeys = {}
         self.score = 0
         self.distance = 0
@@ -241,10 +210,8 @@ class GameScreen(MDScreen):
             self.releaseKey('right')
 
     def on_touch_down(self, touch):
-        # Let buttons / other widgets handle the touch first.
         if super().on_touch_down(touch):
             return True
-        # Anywhere else on the screen: left mouse click fires a shot.
         if getattr(touch, 'button', 'left') == 'left':
             self.pressKey('shot')
             return True
@@ -256,33 +223,19 @@ class GameScreen(MDScreen):
         self.enemyShips.append(ship)
         self.ids.front.add_widget(ship)
 
-    def spawn_cloud(self, dt):
-        cloud = Cloud(size=CLOUD_SIZE)
-        cloud.pos = (randint(0, int(Window.width - cloud.width)), Window.height)
-        self.clouds.append(cloud)
-        self.ids.back.add_widget(cloud)
-
     def update(self, dt):
         self.ship.update(self.eventkeys)
         self.distance += dt * DISTANCE_SPEED
 
-        # Move bullets, drop ones that left the screen
         for shot in self.bullets[:]:
             shot.update()
             if shot.top < 0 or shot.center_y > Window.height:
                 self.remove_bullet(shot)
 
-        # Move enemies, drop ones that reached the bottom
         for enemy in self.enemyShips[:]:
             enemy.update()
             if enemy.top < 0:
                 self.remove_enemy(enemy)
-
-        # Move background clouds - purely visual, no collisions
-        for cloud in self.clouds[:]:
-            cloud.update()
-            if cloud.top < 0:
-                self.remove_cloud(cloud)
 
         self.check_collisions()
 
@@ -292,7 +245,7 @@ class GameScreen(MDScreen):
                 if shot.collides_with(enemy):
                     self.remove_bullet(shot)
                     self.remove_enemy(enemy)
-                    self.score += SCORE_PER_KILL
+                    self.score += SCORE_PER_KILL  # Нараховуємо очки за знищення ворога
                     break
 
         for enemy in self.enemyShips[:]:
@@ -301,7 +254,6 @@ class GameScreen(MDScreen):
                 return
 
     def game_over(self):
-        # Player touched an enemy: kick back to the main menu, Play starts fresh.
         self.manager.current = 'main'
 
     def remove_bullet(self, shot):
@@ -313,11 +265,6 @@ class GameScreen(MDScreen):
         if enemy in self.enemyShips:
             self.enemyShips.remove(enemy)
         self.ids.front.remove_widget(enemy)
-
-    def remove_cloud(self, cloud):
-        if cloud in self.clouds:
-            self.clouds.remove(cloud)
-        self.ids.back.remove_widget(cloud)
 
     def show_menu(self):
         self.manager.current = 'main'

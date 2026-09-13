@@ -1,10 +1,7 @@
-#:set color_cosmos 0.2, 0, 0.1, 1
-
-
 <MainScreen>:
-    MDBoxLayout: 
-        orientation: 'vertical'     
-        padding: '50dp' 
+    MDBoxLayout:
+        orientation: 'vertical'
+        padding: '50dp'
         spacing: '30dp'
         MDIconButton:
             icon: "cog"
@@ -24,13 +21,6 @@
 
 <Ship>:
     size_hint: None, None
-    # Для відлагодження (щоб бачити хітбокси) розкоментувати
-    # canvas.before:
-    #     Color: 
-    #         rgba: 1, 0, 0, 1
-    #     Rectangle:
-    #         size: self.size
-    #         pos: self.pos
 
 <PlayerShip@Ship>:
     source: 'assets/images/rocket.png'
@@ -38,52 +28,70 @@
 
 
 <EnemyShip@Ship>:
-    source: 'assets/images/ufo.png'  
+    source: 'assets/images/ufo.png'
+    size: dp(100), dp(100)
 
 
 <GameScreen>:
+    # Прибрали фон через canvas, залишається стандартний темний колір теми
     MDFloatLayout:
-        md_bg_color: color_cosmos
+        id: game
         MDFloatLayout:
-            id: game
-            MDFloatLayout:
-                id: back
-            MDFloatLayout:
-                id: front
-                PlayerShip:  
-                    id: ship
-                    pos: root.center_x, dp(50)     
+            id: front
+            PlayerShip:
+                id: ship
+                pos: root.center_x, dp(50)
 
-        MDFloatLayout:
-            id: interface
-            MDBoxLayout:
-                spacing: dp(20)
-                padding: dp(20)
-                Widget:
-                MDFloatingActionButton:
-                    icon: "pause"
-                    pos_hint: {'top': 1}
-                    on_press: root.show_menu()
-                Widget:
-            MDBoxLayout:
-                spacing: dp(20)
-                padding: dp(20)
-                MDFloatingActionButton:
-                    icon: "arrow-left-bold"
-                    on_press: root.pressKey('left')
-                    on_release: root.releaseKey('left')
+    MDFloatLayout:
+        id: interface
+        # Очки та дистанція у верхньому лівому кутку білим кольором
+        MDBoxLayout:
+            orientation: 'vertical'
+            size_hint: None, None
+            size: dp(200), dp(80)
+            pos_hint: {'top': 0.98, 'left': 0.02}
+            spacing: dp(2)
+            MDLabel:
+                text: f"Score: {root.score}"
+                font_size: '20sp'
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+                bold: True
+            MDLabel:
+                text: f"Distance: {int(root.distance)} m"
+                font_size: '20sp'
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+                bold: True
 
-                MDFloatingActionButton:
-                    icon: "arrow-right-bold"
-                    md_bg_color: app.theme_cls.primary_color
-                    on_press: root.pressKey('right')
-                    on_release: root.releaseKey('right')
-                Widget:
-                MDFloatingActionButton:
-                    icon: "arrow-up-bold"
-                    md_bg_color: app.theme_cls.primary_color
-                    on_press: root.pressKey('shot')
-                    on_release: root.releaseKey('shot')
+        MDBoxLayout:
+            spacing: dp(20)
+            padding: dp(20)
+            Widget:
+            MDFloatingActionButton:
+                icon: "pause"
+                pos_hint: {'top': 1}
+                on_press: root.show_menu()
+            Widget:
+        MDBoxLayout:
+            spacing: dp(20)
+            padding: dp(20)
+            MDFloatingActionButton:
+                icon: "arrow-left-bold"
+                on_press: root.pressKey('left')
+                on_release: root.releaseKey('left')
+
+            MDFloatingActionButton:
+                icon: "arrow-right-bold"
+                md_bg_color: app.theme_cls.primary_color
+                on_press: root.pressKey('right')
+                on_release: root.releaseKey('right')
+            Widget:
+            MDFloatingActionButton:
+                icon: "arrow-up-bold"
+                md_bg_color: app.theme_cls.primary_color
+                on_press: root.pressKey('shot')
+                on_release: root.releaseKey('shot')
 
 
 <Shot>:
