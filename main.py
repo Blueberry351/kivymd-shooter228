@@ -26,7 +26,7 @@ SHIP_SPEED = dp(10)
 ENEMY_SPEED = dp(3)
 ENEMY_SPAWN_INTERVAL = 1.5  # секунды
 
-BOSS_APPEAR_DISTANCE = 300  # Дистанция появления босса
+BOSS_APPEAR_DISTANCE = 700  # Появление босса на 700 дистанции
 BOSS_MAX_HP = 200
 PLAYER_MAX_HP = 50
 
@@ -326,6 +326,9 @@ class GameScreen(MDScreen):
         self.ids.front.add_widget(ship)
 
     def spawn_cloud(self, dt):
+        # Во время боссфайта облака не спавнятся
+        if self.is_boss_fight:
+            return
         cloud = Cloud(size=CLOUD_SIZE)
         cloud.pos = (randint(0, int(Window.width - cloud.width)), Window.height)
         self.clouds.append(cloud)
@@ -333,9 +336,12 @@ class GameScreen(MDScreen):
 
     def start_boss_fight(self):
         self.is_boss_fight = True
-        # Очищаем рядовых врагов
+
+        # Очищаем обычных врагов и убираем существующие облака
         for enemy in self.enemyShips[:]:
             self.remove_enemy(enemy)
+        for cloud in self.clouds[:]:
+            self.remove_cloud(cloud)
 
         # Создаём босса
         self.boss = BossShip(size=(dp(120), dp(120)))
@@ -343,12 +349,19 @@ class GameScreen(MDScreen):
         self.boss_hp = BOSS_MAX_HP
         self.ids.front.add_widget(self.boss)
 
+    def end_boss_fight(self):
+        """Возвращаем обычный режим игры после победы над боссом"""
+        self.remove_boss()
+        for bb in self.boss_bullets[:]:
+            self.remove_boss_bullet(bb)
+        self.is_boss_fight = False
+
     def update(self, dt):
         self.ship.update(self.eventkeys)
 
         if not self.is_boss_fight:
             self.distance += dt * DISTANCE_SPEED
-            if self.distance >= BOSS_APPEAR_DISTANCE:
+            if self.distance >= BOSS_APPEAR_DISTANCE and self.boss is None:
                 self.start_boss_fight()
         else:
             if self.boss:
@@ -399,9 +412,9 @@ class GameScreen(MDScreen):
                     self.boss.hp -= 10
                     self.boss_hp = max(0, self.boss.hp)
                     if self.boss.hp <= 0:
-                        self.remove_boss()
-                        self.game_victory()
-                        return
+                        self.score += 50  # Бонус очков за босса
+                        self.end_boss_fight()
+                        break
 
         # 3. Белые пули Босса с Игроком (-10 HP)
         for bb in self.boss_bullets[:]:
@@ -429,12 +442,6 @@ class GameScreen(MDScreen):
             return
         self.pause_game()
         self.open_dialog(title="Тібі підбілі", text="Політіть знову?")
-
-    def game_victory(self):
-        if getattr(self, 'game_over_dialog', None) is not None:
-            return
-        self.pause_game()
-        self.open_dialog(title="Перемога!", text="Босс знищений! Політіть знову?")
 
     def pause_game(self):
         if hasattr(self, 'updateEvent'):
