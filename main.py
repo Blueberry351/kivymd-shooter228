@@ -94,7 +94,6 @@ def rects_overlap(a, b):
 
 class AnimatedButton(MDRaisedButton):
     def on_press(self):
-
         anim = Animation(opacity=0.6, d=0.08) + Animation(opacity=1.0, d=0.08)
         anim.start(self)
         super().on_press()
@@ -141,7 +140,7 @@ class StoryDialogBox(FloatLayout):
         self.dialog_label.bind(size=self.dialog_label.setter('text_size'))
 
         hint_label = MDLabel(
-            text="[ » ]",
+            text="[ Нажмите для продолжения » ]",
             font_style="Caption",
             halign="right",
             theme_text_color="Custom",
