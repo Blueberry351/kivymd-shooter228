@@ -1,18 +1,26 @@
-from random import randint, choice, uniform
+import os
+from random import randint, choice
 
 from kivy.clock import Clock
 from kivy.metrics import dp
-from kivy.properties import NumericProperty, ObjectProperty
+from kivy.properties import NumericProperty, ObjectProperty, StringProperty, BooleanProperty
+from kivy.animation import Animation
+from kivy.core.audio import SoundLoader
 from kivymd.app import MDApp
 from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton
+from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.slider import MDSlider
 from kivy import platform
 from kivy.core.window import Window
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
 from kivymd.uix.widget import MDWidget
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivymd.uix.label import MDLabel
+from kivy.graphics import Color, Rectangle, Line
 
 try:
     from PIL import Image as PILImage
@@ -24,11 +32,11 @@ FPS = 60
 BULLET_SPEED = dp(10)
 SHIP_SPEED = dp(10)
 ENEMY_SPEED = dp(3)
-ENEMY_SPAWN_INTERVAL = 1.5  # секунды
+ENEMY_SPAWN_INTERVAL = 1.5
 
-BOSS_APPEAR_DISTANCE = 700  # Появление босса на 700 дистанции
+BOSS_APPEAR_DISTANCE = 700
 BOSS_MAX_HP = 200
-PLAYER_MAX_HP = 50
+PLAYER_MAX_HP = 100
 
 ENEMY_IMAGES = [
     'assets/images/drone.png',
@@ -42,7 +50,7 @@ DIR_UP = 1
 DIR_DOWN = -1
 
 SCORE_PER_KILL = 1
-DISTANCE_SPEED = 15  # Скорость увеличения дистанции
+DISTANCE_SPEED = 15
 
 CLOUD_SPEED = dp(1.5)
 CLOUD_SPAWN_INTERVAL = 1.2
@@ -55,7 +63,6 @@ _HITBOX_FRACTION_CACHE = {}
 
 
 def get_alpha_hitbox_fractions(source):
-    """Возвращает точно рассчитанные границы непрозрачных пикселей из PNG."""
     if source in _HITBOX_FRACTION_CACHE:
         return _HITBOX_FRACTION_CACHE[source]
 
@@ -85,6 +92,79 @@ def rects_overlap(a, b):
     return ax1 < bx2 and ax2 > bx1 and ay1 < by2 and ay2 > by1
 
 
+class AnimatedButton(MDRaisedButton):
+    def on_press(self):
+
+        anim = Animation(opacity=0.6, d=0.08) + Animation(opacity=1.0, d=0.08)
+        anim.start(self)
+        super().on_press()
+
+
+class StoryDialogBox(FloatLayout):
+    speaker_text = StringProperty("")
+    dialog_text = StringProperty("")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (1, None)
+        self.height = dp(180)
+        self.pos_hint = {'x': 0, 'y': 0}
+
+        with self.canvas.before:
+            Color(0.08, 0.08, 0.12, 1)
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+            Color(0.9, 0.6, 0.2, 1)
+            self.border_line = Line(rectangle=(self.x, self.y, self.width, self.height), width=dp(2))
+
+        self.bind(pos=self._update_graphics, size=self._update_graphics)
+
+        layout = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(5), pos_hint={'x': 0, 'y': 0}, size_hint=(1, 1))
+
+        self.speaker_label = MDLabel(
+            text="",
+            font_style="H6",
+            bold=True,
+            theme_text_color="Custom",
+            text_color=(0.9, 0.6, 0.2, 1),
+            size_hint_y=None,
+            height=dp(30)
+        )
+
+        self.dialog_label = MDLabel(
+            text="",
+            font_style="Subtitle1",
+            bold=True,
+            theme_text_color="Custom",
+            text_color=(1, 1, 1, 1),
+            valign="top"
+        )
+        self.dialog_label.bind(size=self.dialog_label.setter('text_size'))
+
+        hint_label = MDLabel(
+            text="[ » ]",
+            font_style="Caption",
+            halign="right",
+            theme_text_color="Custom",
+            text_color=(0.7, 0.7, 0.7, 1),
+            size_hint_y=None,
+            height=dp(20)
+        )
+
+        layout.add_widget(self.speaker_label)
+        layout.add_widget(self.dialog_label)
+        layout.add_widget(hint_label)
+        self.add_widget(layout)
+
+    def _update_graphics(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+        self.border_line.rectangle = (self.x, self.y, self.width, self.height)
+
+    def set_content(self, speaker, text):
+        self.speaker_label.text = speaker
+        self.dialog_label.text = text
+
+
 class Cloud(Widget):
     def update(self):
         self.y -= CLOUD_SPEED
@@ -109,7 +189,6 @@ class Shot(MDWidget):
 
 
 class BossBullet(Widget):
-    """Белые круглые пули босса в стиле Undertale."""
     def __init__(self, speed_x=0, speed_y=-dp(4), **kwargs):
         super().__init__(**kwargs)
         self.speed_x = speed_x
@@ -215,12 +294,10 @@ class BossShip(Ship):
         self.attack_timer = 0
 
     def update(self):
-        # Движение влево-вправо
         self.x += self.speed_x
         if self.x <= dp(10) or self.right >= Window.width - dp(10):
             self.speed_x *= -1
 
-        # Атака белыми пулями каждые 40 кадров
         self.attack_timer += 1
         if self.attack_timer >= 40:
             self.attack_timer = 0
@@ -231,7 +308,6 @@ class BossShip(Ship):
         if not game_screen:
             return
 
-        # Залп из пуль под разными углами
         for vx in [-dp(2), 0, dp(2)]:
             bullet = BossBullet(speed_x=vx, speed_y=-dp(4))
             bullet.center_x = self.center_x
@@ -241,7 +317,9 @@ class BossShip(Ship):
 
 
 class MainScreen(MDScreen):
-    pass
+    def open_settings(self):
+        app = MDApp.get_running_app()
+        app.open_settings_dialog()
 
 
 class GameScreen(MDScreen):
@@ -252,6 +330,7 @@ class GameScreen(MDScreen):
     boss_hp = NumericProperty(BOSS_MAX_HP)
     boss_max_hp = NumericProperty(BOSS_MAX_HP)
     is_boss_fight = ObjectProperty(False)
+    in_dialog = BooleanProperty(False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -261,6 +340,12 @@ class GameScreen(MDScreen):
         self.boss_bullets = []
         self.clouds = []
         self.boss = None
+        self.dialog_box = None
+        self.current_dialog_sequence = []
+        self.dialog_index = 0
+        self.on_dialog_finish_callback = None
+        self.boss_defeated = False
+        self.current_dialog_sound = None
 
     def on_enter(self, *args):
         self.ship = self.ids.ship
@@ -273,6 +358,9 @@ class GameScreen(MDScreen):
 
     def on_leave(self, *args):
         self.pause_game()
+        self.stop_dialog_sound()
+        app = MDApp.get_running_app()
+        app.stop_music()
         Window.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
         return super().on_leave(*args)
 
@@ -290,12 +378,44 @@ class GameScreen(MDScreen):
             self.ids.front.remove_widget(self.boss)
             self.boss = None
 
+        if self.dialog_box:
+            self.remove_widget(self.dialog_box)
+            self.dialog_box = None
+
+        self.stop_dialog_sound()
         self.eventkeys = {}
         self.score = 0
         self.distance = 0
         self.player_hp = PLAYER_MAX_HP
         self.is_boss_fight = False
+        self.in_dialog = False
+        self.boss_defeated = False
         self.ship.pos = self.ship_start_pos
+
+        app = MDApp.get_running_app()
+        app.play_bg_music()
+
+    def stop_dialog_sound(self):
+        if self.current_dialog_sound:
+            self.current_dialog_sound.stop()
+            self.current_dialog_sound = None
+
+    def play_dialog_voice(self, speaker):
+        self.stop_dialog_sound()
+        app = MDApp.get_running_app()
+
+        sound_file = None
+        if speaker == "Балістіка":
+            sound_file = 'assets/audio/voice_boss.mp3'
+        elif speaker == "Зеленский":
+            sound_file = 'assets/audio/zelensky.mp3'
+
+        if sound_file and os.path.exists(sound_file):
+            sound = SoundLoader.load(sound_file)
+            if sound:
+                sound.volume = app.voice_volume
+                sound.play()
+                self.current_dialog_sound = sound
 
     def on_key_down(self, window, key, scancode, codepoint, modifier):
         if key == KEY_A:
@@ -310,6 +430,10 @@ class GameScreen(MDScreen):
             self.releaseKey('right')
 
     def on_touch_down(self, touch):
+        if self.in_dialog:
+            self.advance_dialog()
+            return True
+
         if super().on_touch_down(touch):
             return True
         if getattr(touch, 'button', 'left') == 'left':
@@ -317,8 +441,50 @@ class GameScreen(MDScreen):
             return True
         return False
 
+    def start_story_dialog(self, sequence, finish_callback=None):
+        self.in_dialog = True
+        self.current_dialog_sequence = sequence
+        self.dialog_index = 0
+        self.on_dialog_finish_callback = finish_callback
+
+        app = MDApp.get_running_app()
+        app.stop_music()
+
+        if not self.dialog_box:
+            self.dialog_box = StoryDialogBox()
+            self.add_widget(self.dialog_box)
+
+        self.show_current_dialog_step()
+
+    def show_current_dialog_step(self):
+        if self.dialog_index < len(self.current_dialog_sequence):
+            speaker, text = self.current_dialog_sequence[self.dialog_index]
+            self.dialog_box.set_content(speaker, text)
+            self.play_dialog_voice(speaker)
+        else:
+            self.finish_story_dialog()
+
+    def advance_dialog(self):
+        self.dialog_index += 1
+        if self.dialog_index < len(self.current_dialog_sequence):
+            self.show_current_dialog_step()
+        else:
+            self.finish_story_dialog()
+
+    def finish_story_dialog(self):
+        self.stop_dialog_sound()
+        self.in_dialog = False
+        if self.dialog_box:
+            self.remove_widget(self.dialog_box)
+            self.dialog_box = None
+
+        if self.on_dialog_finish_callback:
+            callback = self.on_dialog_finish_callback
+            self.on_dialog_finish_callback = None
+            callback()
+
     def spawn_enemy(self, dt):
-        if self.is_boss_fight:
+        if self.is_boss_fight or self.in_dialog:
             return
         ship = EnemyShip()
         ship.pos = (randint(0, int(Window.width - ship.width)), Window.height)
@@ -326,67 +492,89 @@ class GameScreen(MDScreen):
         self.ids.front.add_widget(ship)
 
     def spawn_cloud(self, dt):
-        # Во время боссфайта облака не спавнятся
-        if self.is_boss_fight:
+        if self.is_boss_fight or self.in_dialog:
             return
         cloud = Cloud(size=CLOUD_SIZE)
         cloud.pos = (randint(0, int(Window.width - cloud.width)), Window.height)
         self.clouds.append(cloud)
         self.ids.back.add_widget(cloud)
 
-    def start_boss_fight(self):
+    def trigger_boss_encounter(self):
         self.is_boss_fight = True
 
-        # Очищаем обычных врагов и убираем существующие облака
         for enemy in self.enemyShips[:]:
             self.remove_enemy(enemy)
         for cloud in self.clouds[:]:
             self.remove_cloud(cloud)
 
-        # Создаём босса
-        self.boss = BossShip(size=(dp(120), dp(120)))
-        self.boss.pos = (Window.width / 2 - dp(60), Window.height - dp(140))
+        self.boss = BossShip(size=(dp(160), dp(160)))
+        self.boss.pos = (Window.width / 2 - dp(80), Window.height - dp(200))
         self.boss_hp = BOSS_MAX_HP
         self.ids.front.add_widget(self.boss)
 
-    def end_boss_fight(self):
-        """Возвращаем обычный режим игры после победы над боссом"""
-        self.remove_boss()
-        for bb in self.boss_bullets[:]:
-            self.remove_boss_bullet(bb)
-        self.is_boss_fight = False
+        intro_dialog = [
+            ("", "*летіть що то не потужне*"),
+            ("Балістіка", "Зілінський?! опять ті!??"),
+            ("Зеленский", "ну готовся, щя будемо тобі moggати")
+        ]
+
+        def start_boss_music_fight():
+            app = MDApp.get_running_app()
+            app.play_boss_music()
+
+        self.start_story_dialog(intro_dialog, finish_callback=start_boss_music_fight)
+
+    def trigger_boss_defeat(self):
+        self.score += 50
+
+        app = MDApp.get_running_app()
+        app.stop_music()
+
+        outro_dialog = [
+            ("Балістіка", "це ще ні кініць!!!"),
+            ("Зеленский", "я же говорив що я тебе moggну")
+        ]
+
+        def resume_normal_flight():
+            self.remove_boss()
+            for bb in self.boss_bullets[:]:
+                self.remove_boss_bullet(bb)
+            self.is_boss_fight = False
+            self.boss_defeated = True
+            app.play_bg_music()
+
+        self.start_story_dialog(outro_dialog, finish_callback=resume_normal_flight)
 
     def update(self, dt):
+        if self.in_dialog:
+            return
+
         self.ship.update(self.eventkeys)
 
         if not self.is_boss_fight:
             self.distance += dt * DISTANCE_SPEED
-            if self.distance >= BOSS_APPEAR_DISTANCE and self.boss is None:
-                self.start_boss_fight()
+            if self.distance >= BOSS_APPEAR_DISTANCE and not self.boss_defeated and self.boss is None:
+                self.trigger_boss_encounter()
         else:
             if self.boss:
                 self.boss.update()
                 self.boss_hp = self.boss.hp
 
-        # Обновление пуль игрока
         for shot in self.bullets[:]:
             shot.update()
             if shot.y > Window.height or shot.top < 0:
                 self.remove_bullet(shot)
 
-        # Обновление белых пуль босса
         for bb in self.boss_bullets[:]:
             bb.update()
             if bb.top < 0 or bb.right < 0 or bb.x > Window.width:
                 self.remove_boss_bullet(bb)
 
-        # Рядовые враги
         for enemy in self.enemyShips[:]:
             enemy.update()
             if enemy.top < 0:
                 self.remove_enemy(enemy)
 
-        # Облака
         for cloud in self.clouds[:]:
             cloud.update()
             if cloud.top < 0:
@@ -395,7 +583,9 @@ class GameScreen(MDScreen):
         self.check_collisions()
 
     def check_collisions(self):
-        # 1. Пули игрока с обычными врагами
+        if self.in_dialog:
+            return
+
         for shot in self.bullets[:]:
             for enemy in self.enemyShips[:]:
                 if shot.collides_with(enemy):
@@ -404,7 +594,6 @@ class GameScreen(MDScreen):
                     self.score += SCORE_PER_KILL
                     break
 
-        # 2. Пули игрока с Боссом (каждая пуля сносит 10 HP)
         if self.is_boss_fight and self.boss:
             for shot in self.bullets[:]:
                 if shot.collides_with(self.boss):
@@ -412,11 +601,9 @@ class GameScreen(MDScreen):
                     self.boss.hp -= 10
                     self.boss_hp = max(0, self.boss.hp)
                     if self.boss.hp <= 0:
-                        self.score += 50  # Бонус очков за босса
-                        self.end_boss_fight()
-                        break
+                        self.trigger_boss_defeat()
+                        return
 
-        # 3. Белые пули Босса с Игроком (-10 HP)
         for bb in self.boss_bullets[:]:
             if bb.collides_with(self.ship):
                 self.remove_boss_bullet(bb)
@@ -426,7 +613,6 @@ class GameScreen(MDScreen):
                     self.game_over()
                     return
 
-        # 4. Столкновение Игрока с обычными врагами или с самим Боссом (смерть)
         for enemy in self.enemyShips[:]:
             if self.ship.collides_with(enemy):
                 self.player_hp = 0
@@ -441,6 +627,9 @@ class GameScreen(MDScreen):
         if getattr(self, 'game_over_dialog', None) is not None:
             return
         self.pause_game()
+        self.stop_dialog_sound()
+        app = MDApp.get_running_app()
+        app.stop_music()
         self.open_dialog(title="Тібі підбілі", text="Політіть знову?")
 
     def pause_game(self):
@@ -460,9 +649,10 @@ class GameScreen(MDScreen):
         self.game_over_dialog = MDDialog(
             title=title,
             text=text,
+            auto_dismiss=False,
             buttons=[
-                MDFlatButton(text="НЕ ПОТУЖНО", on_release=lambda *a: self.on_game_over_menu()),
-                MDFlatButton(text="ЗНОВУ", on_release=lambda *a: self.on_game_over_restart()),
+                AnimatedButton(text="НЕ ПОТУЖНО", on_release=lambda *a: self.on_game_over_menu()),
+                AnimatedButton(text="ЗНОВУ", on_release=lambda *a: self.on_game_over_restart()),
             ],
         )
         self.game_over_dialog.open()
@@ -517,6 +707,14 @@ class GameScreen(MDScreen):
 
 
 class ShooterApp(MDApp):
+    music_volume = NumericProperty(0.7)
+    voice_volume = NumericProperty(0.9)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.current_music = None
+        self.settings_dialog = None
+
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Orange"
@@ -525,6 +723,64 @@ class ShooterApp(MDApp):
         self.sm.add_widget(MainScreen(name='main'))
         self.sm.add_widget(GameScreen(name='game'))
         return self.sm
+
+    def play_bg_music(self):
+        self.stop_music()
+        path = 'assets/audio/Glamour.mp3'
+        if os.path.exists(path):
+            self.current_music = SoundLoader.load(path)
+            if self.current_music:
+                self.current_music.loop = True
+                self.current_music.volume = self.music_volume
+                self.current_music.play()
+
+    def play_boss_music(self):
+        self.stop_music()
+        path = 'assets/audio/Thundersnail.mp3'
+        if os.path.exists(path):
+            self.current_music = SoundLoader.load(path)
+            if self.current_music:
+                self.current_music.loop = True
+                self.current_music.volume = self.music_volume
+                self.current_music.play()
+
+    def stop_music(self):
+        if self.current_music:
+            self.current_music.stop()
+            self.current_music = None
+
+    def update_music_volume(self, instance, value):
+        self.music_volume = value / 100.0
+        if self.current_music:
+            self.current_music.volume = self.music_volume
+
+    def update_voice_volume(self, instance, value):
+        self.voice_volume = value / 100.0
+
+    def open_settings_dialog(self):
+        content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None, height=dp(160))
+
+        content.add_widget(MDLabel(text="Громкость музыки", theme_text_color="Secondary", size_hint_y=None, height=dp(20)))
+        slider_music = MDSlider(min=0, max=100)
+        slider_music.value = self.music_volume * 100
+        slider_music.bind(value=self.update_music_volume)
+        content.add_widget(slider_music)
+
+        content.add_widget(MDLabel(text="Громкость диалогов", theme_text_color="Secondary", size_hint_y=None, height=dp(20)))
+        slider_voice = MDSlider(min=0, max=100)
+        slider_voice.value = self.voice_volume * 100
+        slider_voice.bind(value=self.update_voice_volume)
+        content.add_widget(slider_voice)
+
+        self.settings_dialog = MDDialog(
+            title="Настройки звука",
+            type="custom",
+            content_cls=content,
+            buttons=[
+                AnimatedButton(text="ЗАКРЫТЬ", on_release=lambda *a: self.settings_dialog.dismiss())
+            ]
+        )
+        self.settings_dialog.open()
 
 
 if platform != 'android':

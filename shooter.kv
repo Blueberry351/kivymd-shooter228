@@ -12,6 +12,7 @@
             icon: "cog"
             pos_hint: {'right': 1}
             icon_size: '50dp'
+            on_release: root.open_settings()
         Image:
             source: 'assets/images/rocket.png'
             size_hint_y: 0.7
@@ -81,7 +82,7 @@
             orientation: 'vertical'
             size_hint: None, None
             size: dp(200), dp(80)
-            pos_hint: {'top': 0.98, 'left': 0.02}
+            pos_hint: {'top': 0.98, 'x': 0.02}
             spacing: dp(2)
             MDLabel:
                 text: f"Score: {root.score}"
@@ -95,6 +96,12 @@
                 theme_text_color: "Custom"
                 text_color: 1, 1, 1, 1
                 bold: True
+
+        # Кнопка паузы / меню (в правом верхнем углу)
+        MDFloatingActionButton:
+            icon: "pause"
+            pos_hint: {'top': 0.98, 'right': 0.98}
+            on_press: root.show_menu()
 
         # --- HP-БАР БОССА (Отображается во время Боссфайта) ---
         Widget:
@@ -114,7 +121,7 @@
                     rgba: 0.9, 0.1, 0.1, 1
                 Rectangle:
                     pos: self.pos
-                    size: (self.width * (root.boss_hp / root.boss_max_hp)), self.height
+                    size: (self.width * (root.boss_hp / root.boss_max_hp if root.boss_max_hp > 0 else 0)), self.height
                 # Белая рамка Undertale-style
                 Color:
                     rgba: 1, 1, 1, 1
@@ -154,14 +161,14 @@
                     rgba: 0.0, 0.34, 0.72, 1
                 Rectangle:
                     pos: (self.x, self.y + self.height * 0.5)
-                    size: (self.width * (root.player_hp / root.player_max_hp)), self.height * 0.5
+                    size: (self.width * (root.player_hp / root.player_max_hp if root.player_max_hp > 0 else 0)), self.height * 0.5
 
                 # Нижняя жёлтая половина
                 Color:
                     rgba: 1.0, 0.84, 0.0, 1
                 Rectangle:
                     pos: (self.x, self.y)
-                    size: (self.width * (root.player_hp / root.player_max_hp)), self.height * 0.5
+                    size: (self.width * (root.player_hp / root.player_max_hp if root.player_max_hp > 0 else 0)), self.height * 0.5
 
                 # Белая рамка
                 Color:
@@ -182,20 +189,14 @@
             halign: 'center'
             valign: 'middle'
 
-        # Кнопки управления
+        # Кнопки управления (Движение и Атака)
         MDBoxLayout:
-            spacing: dp(20)
-            padding: dp(20)
-            Widget:
-            MDFloatingActionButton:
-                icon: "pause"
-                pos_hint: {'top': 1}
-                on_press: root.show_menu()
-            Widget:
-
-        MDBoxLayout:
+            size_hint_y: None
+            height: dp(80)
             spacing: dp(15)
             padding: dp(15)
+            pos_hint: {'bottom': 1}
+
             MDFloatingActionButton:
                 icon: "arrow-left-bold"
                 on_press: root.pressKey('left')
@@ -206,7 +207,9 @@
                 md_bg_color: app.theme_cls.primary_color
                 on_press: root.pressKey('right')
                 on_release: root.releaseKey('right')
+
             Widget:
+
             MDFloatingActionButton:
                 icon: "arrow-up-bold"
                 md_bg_color: app.theme_cls.primary_color
